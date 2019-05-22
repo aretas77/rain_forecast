@@ -11,36 +11,76 @@ import time
 def readAndFormat(path):
 	#nuskaitom faila
 	df = pd.read_csv(path)
-	#ismetame nereikalingus duomenis
+	
+	print('Size of weather data frame is:', df.shape)
+	print('Data before cleanup.')
+	print(df[0:5])
+
+	# Ismetame nereikalingus duomenis.
+	#
+	# Sunshine - number of hours of brightness in the day.
+	#	* Too little data.
+	# Cloud3pm - fraction of sky obscured by clouds at 3pm.
+	#	* Too little data.
+	# Cloud9am - fraction of sky obscured by clouds at 9am.
+	#	* Too little data.
+	# Location - the name of the city located in Australia.
+	#	* We are determining Will it rain in Australia? So we don't need locations.
+	# RISK_MM - amount of next day rain in mm.
+	#	* This could leak prediction data to our model, so drop it.
 	df = df.drop(columns=['Sunshine', 'Evaporation',
 		'Cloud3pm','Cloud9am','Location','RISK_MM','Date'],axis=1)
-	#ismetas N/A values
+	print('Data after cleanup.')
+	print(df[0:5])
+
+	# Drop any null values
 	df = df.dropna(how='any')
-	#apskaiciuojam normalizacija
+	
+	# Apskaiciuojam normalizacija.
+	# We will remove outliers in our data. We are using Z-score to detect and remove
+	# the outliers. In other words, this removes values that are 'not normal' and are
+	# deviated too much.
 	z  = np.abs(stats.zscore(df._get_numeric_data()))
-	#ismetam duomenis kurie neatitinka normu
+	# Select all data which is less than z value of 3.
 	df = df[(z < 3).all(axis=1)]
-	#pakeiciam Yes ir No i 1 ir 0 del paprastumo
+
+	# pakeiciam Yes ir No i 1 ir 0 del paprastumo
 	df['RainToday'].replace({'No': 0,'Yes': 1}, inplace = True)
 	df['RainTomorrow'].replace({'No': 0,'Yes': 1}, inplace = True)
-	#kadangi vejo gusiai klasifikuojami raidemis, sukuriam papildomus columns
-	#kad galima butu suzymeti 1 ir 0 kekvienai direkcijai
+
+	# kadangi vejo gusiai klasifikuojami raidemis, sukuriam papildomus columns
+	# kad galima butu suzymeti 1 ir 0 kekvienai direkcijai
 	categorical_columns = ['WindGustDir','WindDir3pm','WindDir9am']
 	df = pd.get_dummies(df, columns=categorical_columns)
+	print(df[0:5])
+
 	return df
 
 def Preprocess(dataframe, count):
-	#standartizuojam  visa data su MinMaxScaler'iu
+	# standartizuojam  visa data su MinMaxScaler'iu
+	# Now data is between 0 and 1.
 	scaler = preprocessing.MinMaxScaler()
 	scaler.fit(dataframe)
 	dataframe = pd.DataFrame(scaler.transform(dataframe),
 		index=dataframe.index, columns = dataframe.columns)
-	#naudojam SelectKBest metoda isrenkant labiausiai susijusias values su lietum rytoj
+	print('\nDone MinMaxScaler().')
+	print(dataframe[0:5])
+
+	# naudojam SelectKBest metoda isrenkant labiausiai susijusias values su 
+	# lietum rytoj
+
+	# Take all columns but skip RainTommorrow and put it in a different set.
 	x = dataframe.loc[:,dataframe.columns!='RainTomorrow']
 	y = dataframe[['RainTomorrow']]
+
+	# We use chi2 method to determine features that are dependent on the 
+	# target. If, for example, a feature is not dependent on the target, then
+	# the feature is uninformative for classifying observations.
 	selector = SelectKBest(chi2,k=count)
 	selector.fit(x,y)
 	x_new = selector.transform(x)
+
+	# Return top count columns.
 	return (x.columns[selector.get_support(indices=True)])
 
 def LogReg(x,y):
@@ -50,8 +90,8 @@ def LogReg(x,y):
 	x_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
 	y_train = x[['RainTomorrow']]
 	y_test = y[['RainTomorrow']]
-	clf_logreg = LogisticRegression(random_state=0)
-	clf_logreg.fit(x_train,y_train)
+	clf_logreg = LogisticRegression(random_state=0, solver='liblinear')
+	clf_logreg.fit(x_train,y_train.values.ravel())
 	y_pred = clf_logreg.predict(x_test)
 	score=accuracy_score(y_test,y_pred)
 	time_taken = time.time()-t0
@@ -90,6 +130,7 @@ def CrossTestHarness(dataframe, method):
 	
 
 dataframe = readAndFormat('input/weatherAUS.csv')
+
 #selectinam top n values pagal kurias apmokysim 
 elements = Preprocess(dataframe, 4)
 print(elements)
