@@ -227,7 +227,7 @@ dataframe = readAndFormat('input/weatherAUS.csv')
 elements = Preprocess(dataframe, 4)
 
 modified_dataFrame = dataframe[['Humidity3pm', 'Rainfall', 'RainToday', 'RainTomorrow']]
-#CrossTestHarness(modified_dataFrame, 'LogisticRegression')
+CrossTestHarness(modified_dataFrame, 'LogisticRegression')
 
 # Unsupervised methods with preprocessed data
 #KMeansMethod(modified_dataFrame)
