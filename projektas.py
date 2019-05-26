@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 import sklearn
 import time
@@ -10,9 +11,11 @@ from sklearn.feature_selection import SelectKBest, chi2
 from sklearn import preprocessing
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, silhouette_samples, silhouette_score
+from sklearn.metrics import accuracy_score, silhouette_samples, silhouette_score, confusion_matrix, classification_report
 from sklearn.cluster import KMeans
 from plotly import tools
+from mpl_toolkits import mplot3d
+from mpl_toolkits.mplot3d import Axes3D
 
 def readAndFormat(path):
     #nuskaitom faila
@@ -40,6 +43,18 @@ def readAndFormat(path):
 
     # Drop any null values
     df = df.dropna(how='any')
+
+    # Show Pearson correlation coefficients
+    fig, ax = plt.subplots(figsize=[12,12])
+    sns.heatmap(df.corr(), ax=ax, cmap='Blues', annot=True)
+    ax.set_title("Pearson correlation coefficients", size=20)
+    plt.show()
+
+    #params=['MinTemp', 'MaxTemp', 'Rainfall', 'WindGustSpeed', 'WindSpeed9am', 'WindSpeed3pm',
+    #        'Humidity9am', 'Humidity3pm', 'Pressure9am', 'Pressure3pm', 'Temp9am', 'Temp3pm']
+    #pd.plotting.scatter_matrix(df[params], alpha=0.2, figsize=(20, 20))
+    #plt.show()
+
 
     # Apskaiciuojam normalizacija.
     # We will remove outliers in our data. We are using Z-score to detect and remove
@@ -95,36 +110,58 @@ def LogReg(x,y):
     x_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
     y_train = x[['RainTomorrow']]
     y_test = y[['RainTomorrow']]
+
+    # Call LogisticRegression method
     clf_logreg = LogisticRegression(random_state=0, solver='liblinear')
     clf_logreg.fit(x_train,y_train.values.ravel())
+
     y_pred = clf_logreg.predict(x_test)
-    score=accuracy_score(y_test,y_pred)
+    score = accuracy_score(y_test,y_pred)
     time_taken = time.time()-t0
     return score, time_taken
 
 def KMeansMethod(data):
     t0 = time.time()
 
+    train = data[['Humidity3pm', 'Rainfall', 'RainToday']]
+    test = data[['RainTomorrow']]
+
+    # show the relation of tomorrow rain with humidity3pm and rainfall
+    sns.set_style('whitegrid')
+    sns.lmplot('Humidity3pm', 'Rainfall', data=data, col='RainTomorrow', hue='RainTomorrow',
+            palette='coolwarm', height=6, aspect=1, fit_reg=False)
+    
+    # show histogram for humidity3pm
+    sns.set_style('darkgrid')
+    sns.FacetGrid(data, hue='RainTomorrow', palette='coolwarm', height=6, aspect=2,
+            col='RainTomorrow').map(plt.hist, 'Humidity3pm', bins=20, alpha=0.7)
+
+    # show histogram for rainfall
+    sns.FacetGrid(data, hue='RainTomorrow', palette='coolwarm', height=6, aspect=2,
+            col='RainTomorrow').map(plt.hist, 'Rainfall', bins=20, alpha=0.7)
+
     # Calculate the number of clusters (just for diagrams)
-    GetClusterSizeElbow(data)
+    # GetClusterSizeElbow(data)
 
     # Apply kmeans to the dataset / Creat kmeans classifier
     kmeans = KMeans(n_clusters=2, init='k-means++', max_iter=300, n_init=10,
             random_state=0)
-    y_kmeans = kmeans.fit_predict(data)
+    y_kmeans = kmeans.fit_predict(train)
 
-    # Visualise the clusters
-   # plt.scatter(data[y_kmeans == 0, 0], data[y_kmeans == 0, 1], s=100,
-   #         c='red',label='Data')
-   # plt.scatter(data[y_kmeans == 1, 0], data[y_kmeans == 1, 1], s=100,
-   #         c='blue',label='Data2')
+    print(confusion_matrix(data['RainTomorrow'], kmeans.labels_))
+    print(classification_report(data['RainTomorrow'], kmeans.labels_))
 
-   # plt.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1],
-   #         s=100, c='yellow', label='Centroids')
+    plt.show()
+    data['RainTomorrow'] = y_kmeans
 
-   # plt.legend()
-    #GetClusterSizeSilhouette(data)
+    sns.set_style('whitegrid')
+    sns.lmplot('Humidity3pm', 'Rainfall', data=data, hue='RainTomorrow',
+               palette='coolwarm', height=6, aspect=1, fit_reg=False, scatter=True)
+    plt.scatter(kmeans.cluster_centers_[0, 0], kmeans.cluster_centers_[0, 1], color='r')
+    plt.scatter(kmeans.cluster_centers_[1, 0], kmeans.cluster_centers_[1, 1], color='r')
 
+    plt.legend()
+    plt.show()
 
 def GetTrainingData(data, to, fro):
     frames = list()
@@ -171,6 +208,7 @@ def GetClusterSizeElbow(data):
     plt.ylabel('WCSS')
     plt.show()
 
+# Method to calculate how many clusters are recommended for KMeans
 def GetClusterSizeSilhouette(data):
     n_clusters = [ 2, 3, 4, 5 ]
     for n in n_clusters:
@@ -187,9 +225,9 @@ def GetClusterSizeSilhouette(data):
 dataframe = readAndFormat('input/weatherAUS.csv')
 #selectinam top n values pagal kurias apmokysim 
 elements = Preprocess(dataframe, 4)
-print(elements)
+
 modified_dataFrame = dataframe[['Humidity3pm', 'Rainfall', 'RainToday', 'RainTomorrow']]
-CrossTestHarness(modified_dataFrame, 'LogisticRegression')
+#CrossTestHarness(modified_dataFrame, 'LogisticRegression')
 
 # Unsupervised methods with preprocessed data
 #KMeansMethod(modified_dataFrame)
