@@ -53,11 +53,12 @@ def readAndFormat(path):
     ax.set_title("Pearson correlation coefficients", size=20)
     plt.show()
 
-    #params=['MinTemp', 'MaxTemp', 'Rainfall', 'WindGustSpeed', 'WindSpeed9am', 'WindSpeed3pm',
-    #        'Humidity9am', 'Humidity3pm', 'Pressure9am', 'Pressure3pm', 'Temp9am', 'Temp3pm']
-    #pd.plotting.scatter_matrix(df[params], alpha=0.2, figsize=(20, 20))
-    #plt.show()
 
+    params=['MinTemp','MaxTemp','Rainfall','WindGustSpeed', 'WindSpeed9am',
+            'WindSpeed3pm', 'Humidity9am', 'Humidity3pm', 'Pressure9am', 'Pressure3pm',
+            'Temp9am', 'Temp3pm']
+    pd.plotting.scatter_matrix(df[params], alpha=0.2, figsize=(20, 20))
+    plt.show()
 
     # Apskaiciuojam normalizacija.
     # We will remove outliers in our data. We are using Z-score to detect and remove
@@ -160,6 +161,7 @@ def DecisionTree(x,y):
 def KMeansMethod(data):
     t0 = time.time()
 
+
     train = data[['Humidity3pm', 'Rainfall', 'RainToday']]
     test = data[['RainTomorrow']]
 
@@ -176,9 +178,10 @@ def KMeansMethod(data):
     # show histogram for rainfall
     sns.FacetGrid(data, hue='RainTomorrow', palette='coolwarm', height=6, aspect=2,
             col='RainTomorrow').map(plt.hist, 'Rainfall', bins=20, alpha=0.7)
+    plt.show()
 
-    # Calculate the number of clusters (just for diagrams)
-    # GetClusterSizeElbow(data)
+    # Calculate the number of clusters (just for diagrams, we dont use its calculated value)
+    GetClusterSizeElbow(data)
 
     # Apply kmeans to the dataset / Creat kmeans classifier
     kmeans = KMeans(n_clusters=2, init='k-means++', max_iter=300, n_init=10,
@@ -194,11 +197,17 @@ def KMeansMethod(data):
     sns.set_style('whitegrid')
     sns.lmplot('Humidity3pm', 'Rainfall', data=data, hue='RainTomorrow',
                palette='coolwarm', height=6, aspect=1, fit_reg=False, scatter=True)
+    # add center coordinates
     plt.scatter(kmeans.cluster_centers_[0, 0], kmeans.cluster_centers_[0, 1], color='r')
     plt.scatter(kmeans.cluster_centers_[1, 0], kmeans.cluster_centers_[1, 1], color='r')
 
     plt.legend()
     plt.show()
+
+#    ax = plt.axes(projection='3d')
+#    ax.scatter(data['Humidity3pm'], data['Rainfall'], data['RainToday'], c=data['RainTomorrow'], cmap='viridis', linewidth=0.5);
+#    plt.scatter(kmeans.cluster_centers_[0, 0, 0], kmeans.cluster_centers_[1, 1, 1], kmeans.cluster_centers_[2, 2, 2], color='r')
+   # plt.show()
 
 def GetTrainingData(data, to, fro):
     frames = list()
@@ -264,7 +273,7 @@ def GetClusterSizeSilhouette(data):
         print("For n_clusters =", n, "The average silhouette_score is :", sillhouette_avg,
                 "Taken time is :", time_taken)
 
-dataframe = readAndFormat('/home/stud/Documents/PythonDev/rain_forecast/input/weatherAUS.csv')
+dataframe = readAndFormat('input/weatherAUS.csv')
 #selectinam top n values pagal kurias apmokysim 
 elements = Preprocess(dataframe, 4)
 
@@ -272,4 +281,4 @@ modified_dataFrame = dataframe[['Humidity3pm', 'Rainfall', 'RainToday', 'RainTom
 #CrossTestHarness(modified_dataFrame, 'LogisticRegression')
 CrossTestHarness(modified_dataFrame, 'DecisionTreeClassifier')
 # Unsupervised methods with preprocessed data
-#KMeansMethod(modified_dataFrame)
+KMeansMethod(modified_dataFrame)
