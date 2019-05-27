@@ -12,7 +12,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, silhouette_samples, silhouette_score
 from sklearn.cluster import KMeans
+from sklearn import svm #Support vector machine
+from sklearn.tree import DecisionTreeClassifier 
 from plotly import tools
+
 
 def readAndFormat(path):
     #nuskaitom faila
@@ -102,6 +105,40 @@ def LogReg(x,y):
     time_taken = time.time()-t0
     return score, time_taken
 
+def SVM(x,y):
+    X_train = x[['Humidity3pm', 'Rainfall', 'RainToday']]
+    X_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
+    y_train = x[['RainTomorrow']]
+    y_test = y[['RainTomorrow']]
+
+
+    t0=time.time()
+  #  X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.25)
+    clf_svc = svm.SVC(kernel='linear')
+    clf_svc.fit(X_train,y_train)
+    y_pred = clf_svc.predict(X_test)
+    score = accuracy_score(y_test,y_pred)
+    time_taken = time.time()-t0
+    return score, time_taken
+
+
+def DecisionTree(x,y): 
+    X_train = x[['Humidity3pm', 'Rainfall', 'RainToday']]
+    X_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
+    y_train = x[['RainTomorrow']]
+    y_test = y[['RainTomorrow']]
+
+
+    t0=time.time()
+  #  X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.25)
+
+    clf_dt = DecisionTreeClassifier(random_state=0)
+    clf_dt.fit(X_train,y_train)
+    y_pred = clf_dt.predict(X_test)
+    score = accuracy_score(y_test,y_pred)
+    time_taken = time.time()-t0
+    return score, time_taken
+
 def KMeansMethod(data):
     t0 = time.time()
 
@@ -145,9 +182,14 @@ def CrossTestHarness(dataframe, method):
             if j==i:
                 test_datas.append(dataframe[segment_size*i:segment_size*(i+1)])
 
-    if method == 'LogisticRegression':
-        for i in range(10):
+    
+    for i in range(10):
+        if method == 'LogisticRegression':
             scores_times.append(LogReg(train_datas[i],test_datas[i]))
+        if method == "SVM":
+            scores_times.append(SVM(train_datas[i],test_datas[i]))
+        if method == 'DecisionTreeClassifier':
+            scores_times.append(DecisionTree(train_datas[i],test_datas[i]))
     #add your own methods here with if statements
     for i in range(len(scores_times)):
         average_score += scores_times[i][0]
@@ -184,12 +226,12 @@ def GetClusterSizeSilhouette(data):
         print("For n_clusters =", n, "The average silhouette_score is :", sillhouette_avg,
                 "Taken time is :", time_taken)
 
-dataframe = readAndFormat('input/weatherAUS.csv')
+dataframe = readAndFormat('/home/stud/Documents/PythonDev/rain_forecast/input/weatherAUS.csv')
 #selectinam top n values pagal kurias apmokysim 
 elements = Preprocess(dataframe, 4)
 print(elements)
 modified_dataFrame = dataframe[['Humidity3pm', 'Rainfall', 'RainToday', 'RainTomorrow']]
-CrossTestHarness(modified_dataFrame, 'LogisticRegression')
-
+#CrossTestHarness(modified_dataFrame, 'LogisticRegression')
+CrossTestHarness(modified_dataFrame, 'DecisionTreeClassifier')
 # Unsupervised methods with preprocessed data
 #KMeansMethod(modified_dataFrame)
