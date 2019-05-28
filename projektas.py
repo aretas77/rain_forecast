@@ -14,11 +14,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, silhouette_samples, silhouette_score, confusion_matrix, classification_report
 from sklearn.cluster import KMeans
 from sklearn import svm #Support vector machine
-from sklearn.tree import DecisionTreeClassifier 
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 from plotly import tools
 from mpl_toolkits import mplot3d
 from mpl_toolkits.mplot3d import Axes3D
 
+import plotly.offline as py#visualization
+import plotly.graph_objs as go#visualization
+import plotly.tools as tls#visualization
+import plotly.figure_factory as ff#visualization
 
 def readAndFormat(path):
     #nuskaitom faila
@@ -47,16 +52,12 @@ def readAndFormat(path):
     # Drop any null values
     df = df.dropna(how='any')
 
-    # Show Pearson correlation coefficients
-    fig, ax = plt.subplots(figsize=[12,12])
-    sns.heatmap(df.corr(), ax=ax, cmap='Blues', annot=True)
-    ax.set_title("Pearson correlation coefficients", size=20)
-    plt.show()
+ 
 
-    #params=['MinTemp', 'MaxTemp', 'Rainfall', 'WindGustSpeed', 'WindSpeed9am', 'WindSpeed3pm',
+    # params=['MinTemp', 'MaxTemp', 'Rainfall', 'WindGustSpeed', 'WindSpeed9am', 'WindSpeed3pm',
     #        'Humidity9am', 'Humidity3pm', 'Pressure9am', 'Pressure3pm', 'Temp9am', 'Temp3pm']
-    #pd.plotting.scatter_matrix(df[params], alpha=0.2, figsize=(20, 20))
-    #plt.show()
+    # pd.plotting.scatter_matrix(df[params], alpha=0.2, figsize=(20, 20))
+    # plt.show()
 
 
     # Apskaiciuojam normalizacija.
@@ -76,18 +77,37 @@ def readAndFormat(path):
     categorical_columns = ['WindGustDir','WindDir3pm','WindDir9am']
     df = pd.get_dummies(df, columns=categorical_columns)
     print(df[0:5])
-
     return df
 
-def Preprocess(dataframe, count):
-    # standartizuojam  visa data su MinMaxScaler'iu
-    # Now data is between 0 and 1.
+def CorrelationWindow(df):
+     #correlation
+    correlation = df.iloc[:,0:14].corr()
+    fig, ax = plt.subplots(figsize=[13,13])
+    sns.heatmap(correlation, ax=ax, cmap='Blues', annot=True)
+    ax.set_title("Pearson correlation coefficients", size=20)
+    plt.show()
+
+    print(correlation['RainTomorrow'])
+    print("corr_array")
+    #Plotting
+    
+
+def Scale(dataframe):
     scaler = preprocessing.MinMaxScaler()
     scaler.fit(dataframe)
     dataframe = pd.DataFrame(scaler.transform(dataframe),
             index=dataframe.index, columns = dataframe.columns)
+    return dataframe
+
+def Preprocess(dataframe, count):
+    # standartizuojam  visa data su MinMaxScaler'iu
+    # Now data is between 0 and 1.
+    dataframe = Scale(dataframe)
     print('\nDone MinMaxScaler().')
     print(dataframe[0:5])
+
+    # Atkomentuoti korialiacijai pamatyti 
+    # CorrelationWindow(dataframe)
 
     # naudojam SelectKBest metoda isrenkant labiausiai susijusias values su
     # lietum rytoj
@@ -106,19 +126,24 @@ def Preprocess(dataframe, count):
     # Return top count columns.
     return (x.columns[selector.get_support(indices=True)])
 
-def LogReg(x,y):
-    t0 = time.time()
-    # x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=0.25)
-    x_train = x[['Humidity3pm', 'Rainfall', 'RainToday']]
-    x_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
+def LogReg(x,y, isReduced):
+    X_train = x.drop(['RainTomorrow'],axis=1)
+    X_test = y.drop(['RainTomorrow'],axis=1)
     y_train = x[['RainTomorrow']]
     y_test = y[['RainTomorrow']]
+    if isReduced:
+        X_train = x[['Humidity3pm', 'Rainfall', 'RainToday']]
+        X_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
+        y_train = x[['RainTomorrow']]
+        y_test = y[['RainTomorrow']]
+
+    t0 = time.time()
 
     # Call LogisticRegression method
     clf_logreg = LogisticRegression(random_state=0, solver='liblinear')
-    clf_logreg.fit(x_train,y_train.values.ravel())
+    clf_logreg.fit(X_train,y_train.values.ravel())
 
-    y_pred = clf_logreg.predict(x_test)
+    y_pred = clf_logreg.predict(X_test)
     score = accuracy_score(y_test,y_pred)
     time_taken = time.time()-t0
     return score, time_taken
@@ -140,11 +165,16 @@ def SVM(x,y):
     return score, time_taken
 
 
-def DecisionTree(x,y): 
-    X_train = x[['Humidity3pm', 'Rainfall', 'RainToday']]
-    X_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
+def DecisionTree(x,y, isReduced): 
+    X_train = x.drop(['RainTomorrow'],axis=1)
+    X_test = y.drop(['RainTomorrow'],axis=1)
     y_train = x[['RainTomorrow']]
     y_test = y[['RainTomorrow']]
+    if isReduced:
+        X_train = x[['Humidity3pm', 'Rainfall', 'RainToday']]
+        X_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
+        y_train = x[['RainTomorrow']]
+        y_test = y[['RainTomorrow']]
 
 
     t0=time.time()
@@ -206,7 +236,27 @@ def GetTrainingData(data, to, fro):
     frames.append(data[fro:])
     return pd.concat(frames)
 
-def CrossTestHarness(dataframe, method):
+def RandomForest(x,y, isReduced):
+    X_train = x.drop(['RainTomorrow'],axis=1)
+    X_test = y.drop(['RainTomorrow'],axis=1)
+    y_train = x[['RainTomorrow']]
+    y_test = y[['RainTomorrow']]
+    if isReduced:
+        X_train = x[['Humidity3pm', 'Rainfall', 'RainToday']]
+        X_test = y[['Humidity3pm', 'Rainfall', 'RainToday']]
+        y_train = x[['RainTomorrow']]
+        y_test = y[['RainTomorrow']]
+
+    t0=time.time()
+    clf_rf = RandomForestClassifier(n_estimators=100, max_depth=4,random_state=0)
+    clf_rf.fit(X_train,y_train)
+    y_pred = clf_rf.predict(X_test)
+    score = accuracy_score(y_test,y_pred)
+    time_taken = time.time()-t0
+    return score, time_taken
+
+
+def CrossTestHarness(dataframe, method, isReduced):
     segment_size = int(dataframe.shape[0]/10)
     test_datas = list()
     train_datas = list()
@@ -222,11 +272,14 @@ def CrossTestHarness(dataframe, method):
     
     for i in range(10):
         if method == 'LogisticRegression':
-            scores_times.append(LogReg(train_datas[i],test_datas[i]))
+            scores_times.append(LogReg(train_datas[i],test_datas[i], isReduced))
         if method == "SVM":
             scores_times.append(SVM(train_datas[i],test_datas[i]))
         if method == 'DecisionTreeClassifier':
-            scores_times.append(DecisionTree(train_datas[i],test_datas[i]))
+            scores_times.append(DecisionTree(train_datas[i],test_datas[i], isReduced))
+        if method == 'RandomForestClassifier':
+            scores_times.append(RandomForest(train_datas[i],test_datas[i], isReduced))
+
     #add your own methods here with if statements
     for i in range(len(scores_times)):
         average_score += scores_times[i][0]
@@ -267,9 +320,14 @@ def GetClusterSizeSilhouette(data):
 dataframe = readAndFormat('/home/stud/Documents/PythonDev/rain_forecast/input/weatherAUS.csv')
 #selectinam top n values pagal kurias apmokysim 
 elements = Preprocess(dataframe, 4)
-
+isReduced = 0 # 0 - use full frame, 1 - reduced
 modified_dataFrame = dataframe[['Humidity3pm', 'Rainfall', 'RainToday', 'RainTomorrow']]
-#CrossTestHarness(modified_dataFrame, 'LogisticRegression')
-CrossTestHarness(modified_dataFrame, 'DecisionTreeClassifier')
+# CrossTestHarness(modified_dataFrame, 'LogisticRegression', isReduced)
+# CrossTestHarness(modified_dataFrame, 'DecisionTreeClassifier', isReduced)
+# CrossTestHarness(modified_dataFrame, 'RandomForestClassifier', isReduced)
+# CrossTestHarness(Scale(dataframe), 'RandomForestClassifier', isReduced)
+# CrossTestHarness(Scale(dataframe), 'DecisionTreeClassifier', isReduced)
+CrossTestHarness(Scale(dataframe), 'LogisticRegression', isReduced)
+
 # Unsupervised methods with preprocessed data
 #KMeansMethod(modified_dataFrame)
