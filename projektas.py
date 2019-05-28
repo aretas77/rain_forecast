@@ -190,6 +190,7 @@ def DecisionTree(x,y, isReduced):
 def KMeansMethod(data):
     t0 = time.time()
 
+
     train = data[['Humidity3pm', 'Rainfall', 'RainToday']]
     test = data[['RainTomorrow']]
 
@@ -206,9 +207,10 @@ def KMeansMethod(data):
     # show histogram for rainfall
     sns.FacetGrid(data, hue='RainTomorrow', palette='coolwarm', height=6, aspect=2,
             col='RainTomorrow').map(plt.hist, 'Rainfall', bins=20, alpha=0.7)
+    plt.show()
 
-    # Calculate the number of clusters (just for diagrams)
-    # GetClusterSizeElbow(data)
+    # Calculate the number of clusters (just for diagrams, we dont use its calculated value)
+    GetClusterSizeElbow(data)
 
     # Apply kmeans to the dataset / Creat kmeans classifier
     kmeans = KMeans(n_clusters=2, init='k-means++', max_iter=300, n_init=10,
@@ -224,11 +226,17 @@ def KMeansMethod(data):
     sns.set_style('whitegrid')
     sns.lmplot('Humidity3pm', 'Rainfall', data=data, hue='RainTomorrow',
                palette='coolwarm', height=6, aspect=1, fit_reg=False, scatter=True)
+    # add center coordinates
     plt.scatter(kmeans.cluster_centers_[0, 0], kmeans.cluster_centers_[0, 1], color='r')
     plt.scatter(kmeans.cluster_centers_[1, 0], kmeans.cluster_centers_[1, 1], color='r')
 
     plt.legend()
     plt.show()
+
+#    ax = plt.axes(projection='3d')
+#    ax.scatter(data['Humidity3pm'], data['Rainfall'], data['RainToday'], c=data['RainTomorrow'], cmap='viridis', linewidth=0.5);
+#    plt.scatter(kmeans.cluster_centers_[0, 0, 0], kmeans.cluster_centers_[1, 1, 1], kmeans.cluster_centers_[2, 2, 2], color='r')
+   # plt.show()
 
 def GetTrainingData(data, to, fro):
     frames = list()
@@ -255,6 +263,46 @@ def RandomForest(x,y, isReduced):
     time_taken = time.time()-t0
     return score, time_taken
 
+def FeaturesAndAccuracy(dataframe):
+    X = dataframe.drop(['RainTomorrow'],axis=1)
+    y = dataframe['RainTomorrow']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=88)
+    
+    rf = RandomForestClassifier(n_estimators=100, max_depth=4,random_state=0)
+    rf.fit(X_train,y_train)
+    y_rf_pred = rf.predict(X_test)
+    feature_importance_rf = pd.DataFrame(rf.feature_importances_,index=X_train.columns,columns=['Importance']).sort_values(['Importance'],ascending=False)
+
+    # Up to what number of features to plot
+    index = np.array(list(range(2,9)) + [15, 30, 60])
+
+    # creating list of index location
+    features = list(feature_importance_rf.index)
+    features = [X.columns.get_loc(x) for x in features]
+
+    # instantiate classifier
+    rf = RandomForestClassifier(n_estimators=100,random_state=88)
+
+    accuracy_rate = []
+
+    # append the accuracy rate
+    for i in index:
+        # X_train, X_test, y_train, y_test = train_test_split(X.iloc[:,features[0:i]], y, test_size=0.1, random_state=88)
+        # rf.fit(X_train,y_train)
+        # y_rf_pred = rf.predict(X_test)    
+        # accuracy_rate.append(accur    acy_score(y_test,y_rf_pred))
+        RainTommorrowIndex = dataframe.columns.get_loc('RainTomorrow')
+        test = X.iloc[:,features[0:i]]
+        z=dataframe.iloc[:,RainTommorrowIndex]
+        test = pd.concat([test, z], axis=1)
+        accuracy_rate.append(CrossTestHarness(test,'RandomForestClassifier', 0))
+
+    plt.figure(figsize=(7,5))
+    plt.scatter(x=index-1,y=accuracy_rate)
+    plt.ylabel('Accuracy Rate',fontsize=12)
+    plt.xlabel('Number of Features',fontsize=12)
+    plt.xlim(-0.2,60)
+    plt.title('Random Forest \nAccuracy Rate vs. Number of Features', fontsize = 14)
 
 def CrossTestHarness(dataframe, method, isReduced):
     segment_size = int(dataframe.shape[0]/10)
@@ -287,6 +335,7 @@ def CrossTestHarness(dataframe, method, isReduced):
     average_score = average_score/len(scores_times)
     average_time = average_time/len(scores_times)
     print(method, "Average score =", average_score * 100, "% ", "average time =", average_time, "s")
+    return average_score
 
 def GetClusterSizeElbow(data):
     # WCSS - within cluster sum of squares
@@ -317,6 +366,7 @@ def GetClusterSizeSilhouette(data):
         print("For n_clusters =", n, "The average silhouette_score is :", sillhouette_avg,
                 "Taken time is :", time_taken)
 
+# dataframe = readAndFormat('input/weatherAUS.csv')
 dataframe = readAndFormat('/home/stud/Documents/PythonDev/rain_forecast/input/weatherAUS.csv')
 #selectinam top n values pagal kurias apmokysim 
 elements = Preprocess(dataframe, 4)
@@ -327,7 +377,7 @@ modified_dataFrame = dataframe[['Humidity3pm', 'Rainfall', 'RainToday', 'RainTom
 # CrossTestHarness(modified_dataFrame, 'RandomForestClassifier', isReduced)
 # CrossTestHarness(Scale(dataframe), 'RandomForestClassifier', isReduced)
 # CrossTestHarness(Scale(dataframe), 'DecisionTreeClassifier', isReduced)
-CrossTestHarness(Scale(dataframe), 'LogisticRegression', isReduced)
-
+# CrossTestHarness(Scale(dataframe), 'LogisticRegression', isReduced)
+FeaturesAndAccuracy(dataframe)
 # Unsupervised methods with preprocessed data
-#KMeansMethod(modified_dataFrame)
+# KMeansMethod(modified_dataFrame)
